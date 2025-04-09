@@ -2,108 +2,92 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
-import plotly.graph_objects as go
+import matplotlib.ticker as ticker
 
-# 1. Charger les données
-df = pd.read_csv("C:/Users/MSI/zz/NetFlix.csv/NetFlix.csv")
+# ----------------------------
+# 0. Load and clean data
+# ----------------------------
+df = pd.read_csv("NetFlix.csv")  # Load data
 
-# 2. Vérifier les colonnes disponibles
-print("Aperçu des données :")
-print(df.head())
-print("\nColonnes :", df.columns)
-
-# 3. Nettoyage de base
+# Define required columns and remove rows with missing values
 required_columns = ['type', 'country', 'date_added', 'release_year', 'rating', 'duration', 'genres']
 df = df.dropna(subset=[col for col in required_columns if col in df.columns])
 
-# 4. Répartition des types
-plt.figure(figsize=(6, 4))
-sns.countplot(x='type', data=df, hue='type', palette='Set2', legend=False)
-plt.title("Répartition des types (Movie vs TV Show)")
-plt.xlabel("Type")
-plt.ylabel("Nombre")
-plt.tight_layout()
-plt.show()
-
-# 5. Top 10 des pays
-top_countries = df['country'].value_counts().head(10)
-plt.figure(figsize=(8, 5))
-sns.barplot(x=top_countries.values, y=top_countries.index, hue=top_countries.index, dodge=False, palette='Set3', legend=False)
-plt.title("Top 10 des pays avec le plus de titres sur Netflix")
-plt.xlabel("Nombre de titres")
-plt.ylabel("Pays")
-plt.tight_layout()
-plt.show()
-
-# 6. Nombre de sorties par année
-plt.figure(figsize=(10, 5))
-sns.histplot(df['release_year'], bins=30, kde=False, color='skyblue')
-plt.title("Nombre de titres sortis par année")
-plt.xlabel("Année de sortie")
-plt.ylabel("Nombre de titres")
-plt.tight_layout()
-plt.show()
-
-# 7. Répartition des notes (ratings)
-plt.figure(figsize=(8, 4))
-sns.countplot(y='rating', data=df, order=df['rating'].value_counts().index, hue='rating', palette='cool', legend=False)
-plt.title("Répartition des classifications (ratings)")
-plt.xlabel("Nombre")
-plt.ylabel("Classification")
-plt.tight_layout()
-plt.show()
-
-# 8. Durée moyenne des films (minutes)
+# ----------------------------
+# 1. Professional Histogram
+# ----------------------------
 movies = df[df['type'] == 'Movie'].copy()
 movies['duration'] = movies['duration'].astype(str)
 movies['duration_minutes'] = movies['duration'].str.extract(r'(\d+)').astype(float)
 
-plt.figure(figsize=(8, 4))
-sns.histplot(movies['duration_minutes'], bins=30, kde=True, color='salmon')
-plt.title("Durée des films sur Netflix")
-plt.xlabel("Durée (minutes)")
-plt.ylabel("Nombre de films")
+# Plot histogram with KDE (Kernel Density Estimate)
+plt.figure(figsize=(12, 6))
+sns.histplot(
+    data=movies,
+    x='duration_minutes',
+    bins=25,
+    kde=True,
+    color='#E50914', 
+    edgecolor='black',
+    linewidth=0.5
+)
+
+# Customize plot appearance
+plt.title("Distribution de la durée des films sur Netflix", fontsize=16, fontweight='bold', pad=15)
+plt.xlabel("Durée (en minutes)", fontsize=13)
+plt.ylabel("Nombre de films", fontsize=13)
+plt.xticks(fontsize=11)
+plt.yticks(fontsize=11)
+plt.grid(axis='y', linestyle='--', alpha=0.4)
+
+# Adjust x-axis ticks and remove top/right borders
+plt.gca().xaxis.set_major_locator(ticker.MultipleLocator(20))
+plt.gca().spines['top'].set_visible(False)
+plt.gca().spines['right'].set_visible(False)
+
+# Show the plot
 plt.tight_layout()
 plt.show()
 
-# 9. Graphe en arborescence Type → Genre
+# ----------------------------
+# 2. Professional Sunburst Chart with Percentages
+# ----------------------------
 df['genres'] = df['genres'].astype(str).str.split(', ')
 df_exploded = df.explode('genres')
 
+# Create the sunburst chart
 fig = px.sunburst(
     df_exploded,
     path=['type', 'genres'],
     color='type',
-    color_discrete_map={'Movie': 'lightblue', 'TV Show': 'lightgreen'},
-    title="Arborescence des contenus Netflix : Type → Genre"
+    color_discrete_map={
+        'Movie': '#E50914', 
+        'TV Show': '#221f1f' 
+    },
+    title="Répartition des contenus Netflix par type et genre",
+    width=750,
+    height=750,
 )
+
+# Customize chart with percentage labels and hover text
+fig.update_traces(
+    insidetextorientation='radial',
+    hovertemplate='<b>%{label}</b><br>Nombre: %{value}<br>Pourcentage: %{percent}<extra></extra>',
+    textinfo="label+percent entry",  
+    textfont_size=12,  
+)
+
+# Improve layout aesthetics and add title formatting
+fig.update_layout(
+    title_font_size=20,
+    title_font_family="Arial",
+    margin=dict(t=60, l=0, r=0, b=0),
+    uniformtext=dict(minsize=10, mode='hide'),
+    paper_bgcolor="white",
+    font=dict(color="black"),
+    title_x=0.5, 
+    title_y=0.97,  
+)
+
+# Show the sunburst chart
 fig.show()
-
-# 10. Prep diagramme Type → Genre
-genre_flow = df_exploded.groupby(['type', 'genres']).size().reset_index(name='count')
-node_labels = ['Movie', 'TV Show'] + list(genre_flow['genres'].unique())
-node_ids = {label: idx for idx, label in enumerate(node_labels)}
-links = []
-for _, row in genre_flow.iterrows():
-    type_idx = node_ids[row['type']]
-    genre_idx = node_ids[row['genres']]
-    links.append({'source': type_idx, 'target': genre_idx, 'value': row['count']})
-
-fig_flow = go.Figure(go.Sankey(
-    node=dict(
-        pad=15,
-        thickness=20,
-        line=dict(color="black", width=0.5),
-        label=node_labels,
-        color=["lightblue", "lightgreen"] + ['#FFA07A' for _ in range(len(node_labels) - 2)]
-    ),
-    link=dict(
-        source=[link['source'] for link in links],
-        target=[link['target'] for link in links],
-        value=[link['value'] for link in links],
-        color='rgba(255, 99, 132, 0.6)'
-    )
-))
-
-fig_flow.update_layout(title="Diagramme: Type → Genre")
-fig_flow.show()
